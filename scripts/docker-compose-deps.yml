@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+
+  database:
+    image: redis
+    mem_limit: 700m
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - javabackend6
+
+networks:
+  javabackend6:

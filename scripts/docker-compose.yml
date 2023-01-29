@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+
+  database:
+    image: redis
+    mem_limit: 700m
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - javabackend6
+
+  usersmanagementservice:
+    image: dockersentinel/user-management-service
+    mem_limit: 700m
+    depends_on:
+      - database
+    environment:
+      WAIT_HOSTS: database:6379
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    ports:
+      - "10000:10000"
+    hostname: usersmanagementservice
+    networks:
+      - javabackend6
+
+networks:
+  javabackend6:
