@@ -24,13 +24,13 @@ class DatabaseSeeder @Autowired constructor(
     fun seed(event: ContextRefreshedEvent) = runBlocking {
         val count = roleRepository.count().awaitFirstOrNull()
         if (count == null || count == 0L) {
-            val administratorRole = Role(name = Role.ADMINISTRATOR)
+            val administratorRole = Role(value = Role.ADMINISTRATOR)
             roleRepository.save(administratorRole).subscribe {
-                log.debug("Administrator role created and saved")
+                log.info("Administrator role created and saved")
             }
-            val guestRole = Role(name = Role.GUEST)
+            val guestRole = Role(value = Role.GUEST)
             roleRepository.save(guestRole).subscribe {
-                log.debug("Guest role created and saved")
+                log.info("Guest role created and saved")
             }
         }
 
@@ -44,7 +44,7 @@ class DatabaseSeeder @Autowired constructor(
                     roles = listOf(it)
                 )
                 userRepository.save(administrator).subscribe {
-                    log.debug("Administrator user created and saved")
+                    log.info("Administrator user created and saved")
                 }
             }
 

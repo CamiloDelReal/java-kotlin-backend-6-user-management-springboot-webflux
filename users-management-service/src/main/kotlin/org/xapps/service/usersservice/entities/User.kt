@@ -6,18 +6,11 @@ import org.springframework.data.annotation.Id
 import org.springframework.data.annotation.Reference
 import org.springframework.data.redis.core.RedisHash
 import org.springframework.data.redis.core.index.Indexed
-import org.springframework.lang.Nullable
 import org.xapps.service.usersservice.entities.User.Companion.TABLE_NAME
-import java.util.UUID
 
 @RedisHash(TABLE_NAME)
 data class User(
         @Id
-        @Indexed
-        @NotNull
-        @JsonProperty(value = "id")
-        var id: String = UUID.randomUUID().toString(),
-
         @Indexed
         @NotNull
         @JsonProperty(value = "email")
@@ -31,10 +24,6 @@ data class User(
         @JsonProperty(value = "name")
         var name: String = "",
 
-//        @ManyToMany(fetch = FetchType.EAGER, cascade = [CascadeType.DETACH])
-//        @JoinTable(name = "users_roles",
-//                joinColumns = [JoinColumn(name = "userId", referencedColumnName = "id")],
-//                inverseJoinColumns = [JoinColumn(name = "role_id", referencedColumnName = "id")])
         @Reference
         @JsonProperty(value = "roles")
         var roles: List<Role> = emptyList()

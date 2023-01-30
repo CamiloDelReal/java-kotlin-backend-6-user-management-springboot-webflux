@@ -31,7 +31,7 @@ class UserRepository @Autowired constructor(
     fun save(user: User): Mono<User> =
         reactiveRedisOperations
             .opsForHash<String, User>()
-            .put(User.TABLE_NAME, user.id, user)
+            .put(User.TABLE_NAME, user.email, user)
             .map {
                 user
             }

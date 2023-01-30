@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.redis.core.ReactiveRedisOperations
 import org.springframework.stereotype.Repository
 import org.xapps.service.usersservice.entities.Role
+import org.xapps.service.usersservice.entities.User
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 
@@ -23,18 +24,23 @@ class RoleRepository @Autowired constructor(
             .keys(Role.TABLE_NAME)
             .count()
 
+    fun findById(id: String): Mono<User> =
+            reactiveRedisOperations
+                    .opsForHash<String, User>()
+                    .get(User.TABLE_NAME, id)
+
     fun findByName(name: String): Mono<Role> =
         reactiveRedisOperations
             .opsForHash<String, Role>()
             .values(Role.TABLE_NAME)
-            .filter { role -> role.name == name }
+            .filter { role -> role.value == name }
             .single()
 
 
     fun save(role: Role): Mono<Role> =
         reactiveRedisOperations
             .opsForHash<String, Role>()
-            .put(Role.TABLE_NAME, role.id, role)
+            .put(Role.TABLE_NAME, role.value, role)
             .map { role }
 
 }

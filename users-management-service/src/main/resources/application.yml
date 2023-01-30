@@ -5,8 +5,16 @@ spring:
   application:
     name: users-service
 
+  main:
+    allow-bean-definition-overriding: true
+
   redis:
-    database: 3
+    database: 2
     host: localhost
     port: 6379
     password: ""
+
+security:
+  token:
+    key: 123456
+    validity: 25920000000

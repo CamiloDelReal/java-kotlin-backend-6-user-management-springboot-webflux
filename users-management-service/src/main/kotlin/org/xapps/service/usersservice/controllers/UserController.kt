@@ -13,9 +13,12 @@ import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.xapps.service.usersservice.entities.Authentication
+import org.xapps.service.usersservice.entities.Login
 import org.xapps.service.usersservice.entities.Role
 import org.xapps.service.usersservice.entities.User
 import org.xapps.service.usersservice.services.UserService
+import org.xapps.service.usersservice.services.exceptions.InvalidCredentialsException
 import org.xapps.service.usersservice.services.exceptions.NotFoundException
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
@@ -39,6 +42,15 @@ class UserController(
     )
     fun getUsers(): ResponseEntity<Flux<User>> {
         return ResponseEntity.ok(userService.getAll())
+    }
+
+    @PostMapping(
+            path = ["/login"],
+            consumes = [MediaType.APPLICATION_JSON_VALUE],
+            produces = [MediaType.APPLICATION_JSON_VALUE]
+    )
+    fun login(@Valid @RequestBody login: Login): ResponseEntity<Mono<Authentication>> {
+        return ResponseEntity.ok(userService.login(login))
     }
 
     @GetMapping(
@@ -78,8 +90,10 @@ class UserController(
 class UserControllerExceptionHandler {
     @ExceptionHandler
     fun globalCatcher(ex: Exception): ResponseEntity<Any> {
+        println("Exception received in global catcher, ${ex.message}")
         return when(ex) {
             is NotFoundException -> ResponseEntity(ex.message, HttpStatus.NOT_FOUND)
+            is InvalidCredentialsException -> ResponseEntity(HttpStatus.UNAUTHORIZED)
             else -> ResponseEntity(ex.message, HttpStatus.INTERNAL_SERVER_ERROR)
         }
     }
