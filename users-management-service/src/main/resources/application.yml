@@ -17,4 +17,8 @@ spring:
 security:
   token:
     key: 123456
-    validity: 25920000000
+    validity: 259200000000
+
+logging:
+  level:
+    root: info

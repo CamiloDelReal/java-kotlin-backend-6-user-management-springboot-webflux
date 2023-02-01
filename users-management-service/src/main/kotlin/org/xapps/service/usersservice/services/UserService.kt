@@ -11,6 +11,7 @@ import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService
 import org.springframework.security.core.userdetails.UserDetails
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.xapps.service.usersservice.entities.Authentication
 import org.xapps.service.usersservice.entities.Login
@@ -19,22 +20,26 @@ import org.xapps.service.usersservice.entities.User
 import org.xapps.service.usersservice.repositories.RoleRepository
 import org.xapps.service.usersservice.repositories.UserRepository
 import org.xapps.service.usersservice.security.SecurityParams
+import org.xapps.service.usersservice.services.exceptions.EmailNotAvailableException
+import org.xapps.service.usersservice.services.exceptions.EmailNotFound
 import org.xapps.service.usersservice.services.exceptions.InvalidCredentialsException
 import org.xapps.service.usersservice.services.exceptions.NotFoundException
 import org.xapps.service.usersservice.utils.lazyLogger
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.switchIfEmpty
 import java.time.Instant
 import java.util.*
 
 
 @Service
 class UserService @Autowired constructor(
-        private val roleRepository: RoleRepository,
-        private val userRepository: UserRepository,
-        @Lazy private val authenticationManager: ReactiveAuthenticationManager,
-        private val securityParams: SecurityParams,
-        private val objectMapper: ObjectMapper
+    private val roleRepository: RoleRepository,
+    private val userRepository: UserRepository,
+    @Lazy private val authenticationManager: ReactiveAuthenticationManager,
+    private val securityParams: SecurityParams,
+    private val objectMapper: ObjectMapper,
+    private val passwordEncoder: PasswordEncoder
 ): ReactiveUserDetailsService {
 
     override fun findByUsername(username: String): Mono<UserDetails> {
@@ -89,7 +94,74 @@ class UserService @Autowired constructor(
 
     fun create(newUser: User): Mono<User> {
         return userRepository
-            .save(newUser)
+            .findById(newUser.email)
+            .flatMap {
+                Mono.error<User>(EmailNotAvailableException("Email ${newUser.email} is not available"))
+            }
+            .switchIfEmpty {
+                roleRepository.findByNames(newUser.roles.map { it.value })
+                    .collectList()
+                    .flatMap { persistedRoles ->
+                        val userRoles: List<Role> = if(persistedRoles.isNullOrEmpty()) {
+                            listOf(Role(value = Role.GUEST))
+                        } else {
+                            persistedRoles
+                        }
+                        newUser.roles = userRoles
+                        newUser.password = passwordEncoder.encode(newUser.password)
+                        userRepository.save(newUser)
+                    }.single()
+            }
+    }
+
+    fun update(id: String, updatedUser: User): Mono<User> {
+        return userRepository
+            .findById(id)
+            .flatMap { existentUser ->
+                if (id != updatedUser.email) {
+                    userRepository.findById(updatedUser.email)
+                        .flatMap {
+                            Mono.error<User>(EmailNotAvailableException("Email ${updatedUser.email} is not available"))
+                        }
+                        .switchIfEmpty {
+                            roleRepository.findByNames(updatedUser.roles.map { it.value })
+                                .collectList()
+                                .flatMap { persistedRoles ->
+                                    val userRoles: List<Role> = if(persistedRoles.isNullOrEmpty()) {
+                                        existentUser.roles
+                                    } else {
+                                        persistedRoles
+                                    }
+                                    updatedUser.roles = userRoles
+                                    updatedUser.password = passwordEncoder.encode(updatedUser.password)
+                                    userRepository.delete(id)
+                                        .flatMap {  count ->
+                                            if(count == 1L)
+                                                userRepository.save(updatedUser)
+                                            else {
+                                                Mono.error(NotFoundException("Error deleting old user registry with ID $id"))
+                                            }
+                                        }
+                                }.single()
+                        }
+                } else {
+                    roleRepository.findByNames(updatedUser.roles.map { it.value })
+                        .collectList()
+                        .flatMap { persistedRoles ->
+                            val userRoles: List<Role> = if(persistedRoles.isNullOrEmpty()) {
+                                existentUser.roles
+                            } else {
+                                persistedRoles
+                            }
+                            updatedUser.roles = userRoles
+                            updatedUser.password = passwordEncoder.encode(updatedUser.password)
+                            userRepository.save(updatedUser)
+                        }.single()
+                }
+            }
+            .switchIfEmpty {
+                Mono.error(EmailNotFound("Email $id nor found in database"))
+            }
     }
 
     fun delete(id: String): Mono<Any> {
@@ -102,6 +174,18 @@ class UserService @Autowired constructor(
                     Mono.error(NotFoundException("User with ID $id not found"))
                 }
             }
+    }
+
+    fun hasAdminRole(user: User): Mono<Boolean> {
+        return Mono.create { sink ->
+            logger.info("Checking Administrator role")
+            logger.info("Roles ${user.roles}")
+            if(user.roles.map { it.value }.contains(Role.ADMINISTRATOR)) {
+                sink.success(true)
+            } else {
+                sink.success(false)
+            }
+        }
     }
 
     companion object {

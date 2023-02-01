@@ -3,25 +3,22 @@ package org.xapps.service.usersservice.controllers
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.ControllerAdvice
-import org.springframework.web.bind.annotation.DeleteMapping
-import org.springframework.web.bind.annotation.ExceptionHandler
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.core.context.ReactiveSecurityContextHolder
+import org.springframework.web.bind.annotation.*
 import org.xapps.service.usersservice.entities.Authentication
 import org.xapps.service.usersservice.entities.Login
 import org.xapps.service.usersservice.entities.Role
 import org.xapps.service.usersservice.entities.User
 import org.xapps.service.usersservice.services.UserService
+import org.xapps.service.usersservice.services.exceptions.CredentialsNotProvided
+import org.xapps.service.usersservice.services.exceptions.EmailNotAvailableException
 import org.xapps.service.usersservice.services.exceptions.InvalidCredentialsException
 import org.xapps.service.usersservice.services.exceptions.NotFoundException
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.switchIfEmpty
 import javax.validation.Valid
 
 @RestController
@@ -34,66 +31,116 @@ class UserController(
         path = ["/roles"],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun getRoles(): ResponseEntity<Flux<Role>> =
-        ResponseEntity.ok(userService.getAllRoles())
+    fun getRoles(): Flux<Role> =
+        userService.getAllRoles()
 
     @GetMapping(
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun getUsers(): ResponseEntity<Flux<User>> {
-        return ResponseEntity.ok(userService.getAll())
-    }
+    @PreAuthorize("isAuthenticated() and hasAuthority('Administrator')")
+    fun getUsers(): Flux<User> =
+            userService.getAll()
 
     @PostMapping(
-            path = ["/login"],
-            consumes = [MediaType.APPLICATION_JSON_VALUE],
-            produces = [MediaType.APPLICATION_JSON_VALUE]
+        path = ["/login"],
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun login(@Valid @RequestBody login: Login): ResponseEntity<Mono<Authentication>> {
-        return ResponseEntity.ok(userService.login(login))
-    }
+    fun login(@Valid @RequestBody login: Login): Mono<Authentication> =
+            userService.login(login)
 
     @GetMapping(
         path = ["/{id}"],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun getUser(@PathVariable("id") id: String): ResponseEntity<Mono<User>> {
-        return ResponseEntity.ok(userService.getById(id))
-    }
+    @PreAuthorize("isAuthenticated() and hasAuthority('Administrator') or isAuthenticated() and principal.email == #id")
+    fun getUser(@PathVariable("id") id: String): Mono<User> =
+        userService.getById(id)
 
     @PostMapping(
         consumes = [MediaType.APPLICATION_JSON_VALUE],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun createUser(@Valid @RequestBody newUser: User): ResponseEntity<Mono<User>> {
-        return ResponseEntity.ok(userService.create(newUser))
-    }
+    fun createUser(@Valid @RequestBody newUser: User): Mono<User> =
+        userService.hasAdminRole(newUser)
+            .flatMap { hasAdminRole ->
+                if(!hasAdminRole) {
+                    userService.create(newUser)
+                } else {
+                    ReactiveSecurityContextHolder.getContext()
+                        .flatMap { context ->
+                            val principal = context.authentication?.principal
+                            if (principal != null && principal is User) {
+                                userService.hasAdminRole(principal)
+                                    .flatMap { credentialsHasAdminRole ->
+                                        if (credentialsHasAdminRole) {
+                                            userService.create(newUser)
+                                        } else {
+                                            Mono.error(CredentialsNotProvided("Request requires Administrator credentials to proceed"))
+                                        }
+                                    }
+                            } else {
+                                Mono.error(CredentialsNotProvided("Invalid credentials"))
+                            }
+                        }
+                        .switchIfEmpty {
+                            Mono.error(CredentialsNotProvided("Request requires Administrator credentials to proceed"))
+                        }
+                }
+            }
 
     @PutMapping(
         path = ["/{id}"],
         consumes = [MediaType.APPLICATION_JSON_VALUE],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
-    fun updateUser(@PathVariable("id") id: String, @Valid @RequestBody modifiedUser: User): ResponseEntity<Mono<User>> {
-        TODO()
-    }
+    @PreAuthorize("isAuthenticated() and hasAuthority('Administrator') or isAuthenticated() and principal.email == #id")
+    fun updateUser(@Valid @RequestBody updatedUser: User, @PathVariable("id") id: String): Mono<User> =
+        userService.hasAdminRole(updatedUser)
+            .flatMap { hasAdminRole ->
+                if(!hasAdminRole) {
+                    userService.update(id, updatedUser)
+                } else {
+                    ReactiveSecurityContextHolder.getContext()
+                        .flatMap { context ->
+                            val principal = context.authentication?.principal
+                            if (principal != null && principal is User) {
+                                userService.hasAdminRole(principal)
+                                    .flatMap { credentialsHasAdminRole ->
+                                        if (credentialsHasAdminRole) {
+                                            userService.update(id, updatedUser)
+                                        } else {
+                                            Mono.error(CredentialsNotProvided("Request requires Administrator credentials to proceed"))
+                                        }
+                                    }
+                            } else {
+                                Mono.error(CredentialsNotProvided("Invalid credentials"))
+                            }
+                        }
+                        .switchIfEmpty {
+                            Mono.error(CredentialsNotProvided("Request requires Administrator credentials to proceed"))
+                        }
+                }
+            }
 
     @DeleteMapping(
         path = ["/{id}"]
     )
-    fun deleteUser(@PathVariable("id") id: String): ResponseEntity<Mono<Any>> {
-        return ResponseEntity.ok(userService.delete(id))
-    }
+    @PreAuthorize("isAuthenticated() and hasAuthority('Administrator') or isAuthenticated() and principal.email == #id")
+    fun deleteUser(@PathVariable("id") id: String): Mono<Any> =
+        userService.delete(id)
 }
 
 @ControllerAdvice
 class UserControllerExceptionHandler {
     @ExceptionHandler
     fun globalCatcher(ex: Exception): ResponseEntity<Any> {
-        println("Exception received in global catcher, ${ex.message}")
+        ex.printStackTrace()
         return when(ex) {
             is NotFoundException -> ResponseEntity(ex.message, HttpStatus.NOT_FOUND)
             is InvalidCredentialsException -> ResponseEntity(HttpStatus.UNAUTHORIZED)
+            is EmailNotAvailableException -> ResponseEntity(ex.message, HttpStatus.BAD_REQUEST)
+            is AccessDeniedException -> ResponseEntity(ex.message, HttpStatus.UNAUTHORIZED)
             else -> ResponseEntity(ex.message, HttpStatus.INTERNAL_SERVER_ERROR)
         }
     }

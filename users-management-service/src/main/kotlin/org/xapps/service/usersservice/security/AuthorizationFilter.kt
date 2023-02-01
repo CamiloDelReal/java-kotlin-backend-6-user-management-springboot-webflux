@@ -29,12 +29,14 @@ class AuthorizationFilter @Autowired constructor(
         val request = exchange.request
         val response = exchange.response
         val authzHeaders: List<String>? = request.headers[HttpHeaders.AUTHORIZATION]
+        logger.info("Authz headr $authzHeaders")
         var authentication: Authentication? = null
         if(!authzHeaders.isNullOrEmpty()) {
             authentication = authzHeaders.firstNotNullOfOrNull { authzHeader ->
                 getAuthentication(authzHeader)
             }
             if (authentication == null) {
+                logger.info("Request unauthorized")
                 response.statusCode = HttpStatus.UNAUTHORIZED
             }
         }
@@ -55,6 +57,7 @@ class AuthorizationFilter @Autowired constructor(
                     .body
             val subject = claims.subject
             val user: User = objectMapper.readValue(subject, User::class.java)
+            logger.info("User in token $user")
             val authorities: List<GrantedAuthority> = user.roles.map { role -> SimpleGrantedAuthority(role.value) }
             auth = UsernamePasswordAuthenticationToken(user, null, authorities)
         } catch (ex: Exception) {

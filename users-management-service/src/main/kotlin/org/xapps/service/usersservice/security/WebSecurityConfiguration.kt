@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.ReactiveAuthenticationManager
 import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder
@@ -50,6 +51,7 @@ class WebSecurityConfiguration {
             .authenticationManager(authenticationManager)
             .authorizeExchange()
             .pathMatchers(HttpMethod.POST, "/users/login").permitAll()
+            .pathMatchers(HttpMethod.POST, "/users").permitAll()
             .anyExchange().authenticated()
             .and()
             .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())

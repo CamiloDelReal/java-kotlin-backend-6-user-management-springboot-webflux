@@ -36,6 +36,12 @@ class RoleRepository @Autowired constructor(
             .filter { role -> role.value == name }
             .single()
 
+    fun findByNames(names: List<String>): Flux<Role> =
+        reactiveRedisOperations
+            .opsForHash<String, Role>()
+            .values(Role.TABLE_NAME)
+            .filter { role -> role.value in names }
+
 
     fun save(role: Role): Mono<Role> =
         reactiveRedisOperations
