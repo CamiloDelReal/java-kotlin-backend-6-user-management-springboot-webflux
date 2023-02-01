@@ -1,0 +1,5 @@
+FROM openjdk:17-slim
+COPY build/libs/usersservice-0.0.1.jar usersservice-0.0.1.jar
+ADD https://github.com/ufoscout/docker-compose-wait/releases/download/2.9.0/wait /wait
+RUN chmod +x /wait
+CMD /wait && java -jar /usersservice-0.0.1.jar

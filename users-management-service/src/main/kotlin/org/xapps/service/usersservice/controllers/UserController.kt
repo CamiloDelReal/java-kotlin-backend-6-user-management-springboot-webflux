@@ -5,6 +5,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.core.context.ReactiveSecurityContextHolder
 import org.springframework.web.bind.annotation.*
 import org.xapps.service.usersservice.entities.Authentication
@@ -31,6 +32,7 @@ class UserController(
         path = ["/roles"],
         produces = [MediaType.APPLICATION_JSON_VALUE]
     )
+    @PreAuthorize("isAuthenticated() and hasAuthority('Administrator')")
     fun getRoles(): Flux<Role> =
         userService.getAllRoles()
 
@@ -135,12 +137,13 @@ class UserController(
 class UserControllerExceptionHandler {
     @ExceptionHandler
     fun globalCatcher(ex: Exception): ResponseEntity<Any> {
-        ex.printStackTrace()
         return when(ex) {
-            is NotFoundException -> ResponseEntity(ex.message, HttpStatus.NOT_FOUND)
+            is NotFoundException -> ResponseEntity(HttpStatus.NOT_FOUND)
             is InvalidCredentialsException -> ResponseEntity(HttpStatus.UNAUTHORIZED)
-            is EmailNotAvailableException -> ResponseEntity(ex.message, HttpStatus.BAD_REQUEST)
-            is AccessDeniedException -> ResponseEntity(ex.message, HttpStatus.UNAUTHORIZED)
+            is EmailNotAvailableException -> ResponseEntity(HttpStatus.BAD_REQUEST)
+            is AccessDeniedException -> ResponseEntity(HttpStatus.UNAUTHORIZED)
+            is BadCredentialsException -> ResponseEntity(HttpStatus.UNAUTHORIZED)
+            is CredentialsNotProvided -> ResponseEntity(HttpStatus.UNAUTHORIZED)
             else -> ResponseEntity(ex.message, HttpStatus.INTERNAL_SERVER_ERROR)
         }
     }
