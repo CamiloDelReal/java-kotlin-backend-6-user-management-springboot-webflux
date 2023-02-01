@@ -12,7 +12,7 @@ services:
       - javabackend6
 
   usersmanagementservice:
-    image: dockersentinel/user-management-service
+    image: dockersentinel/users-management-service
     mem_limit: 700m
     depends_on:
       - database
